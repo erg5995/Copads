@@ -1,0 +1,14 @@
+C:\Users\erg11\Documents\Projects\Education\copads_example\bin\Debug\net7.0\copads_example.exe
+C:\Users\erg11\Documents\Projects\Education\copads_example\bin\Debug\net7.0\copads_example.deps.json
+C:\Users\erg11\Documents\Projects\Education\copads_example\bin\Debug\net7.0\copads_example.runtimeconfig.json
+C:\Users\erg11\Documents\Projects\Education\copads_example\bin\Debug\net7.0\copads_example.dll
+C:\Users\erg11\Documents\Projects\Education\copads_example\bin\Debug\net7.0\copads_example.pdb
+C:\Users\erg11\Documents\Projects\Education\copads_example\obj\Debug\net7.0\copads_example.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\erg11\Documents\Projects\Education\copads_example\obj\Debug\net7.0\copads_example.AssemblyInfoInputs.cache
+C:\Users\erg11\Documents\Projects\Education\copads_example\obj\Debug\net7.0\copads_example.AssemblyInfo.cs
+C:\Users\erg11\Documents\Projects\Education\copads_example\obj\Debug\net7.0\copads_example.csproj.CoreCompileInputs.cache
+C:\Users\erg11\Documents\Projects\Education\copads_example\obj\Debug\net7.0\copads_example.dll
+C:\Users\erg11\Documents\Projects\Education\copads_example\obj\Debug\net7.0\refint\copads_example.dll
+C:\Users\erg11\Documents\Projects\Education\copads_example\obj\Debug\net7.0\copads_example.pdb
+C:\Users\erg11\Documents\Projects\Education\copads_example\obj\Debug\net7.0\copads_example.genruntimeconfig.cache
+C:\Users\erg11\Documents\Projects\Education\copads_example\obj\Debug\net7.0\ref\copads_example.dll
