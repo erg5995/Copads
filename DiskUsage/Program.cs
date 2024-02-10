@@ -7,6 +7,16 @@ namespace Extensions {
                 bag.Add(item);
             }
         }
+
+        public static void SafeAddAllFiles(this ConcurrentBag<string> bag, string dir) {
+            List<string> files = new List<string>();
+            try {
+                files.AddRange(Directory.GetFiles(dir));
+            } catch(UnauthorizedAccessException uae) {
+                Console.WriteLine($"Warning: Permission not granted to read from {dir}");
+            }
+            bag.AddAll(files);
+        }
     }
 }
 
@@ -43,9 +53,8 @@ namespace CopadsExample {
         }
 
         public static string ValidatePath(string path) {
-            FileInfo fi = null;
             try {
-                fi = new FileInfo(path);
+                FileInfo fi = new FileInfo(path);
             }
             catch (Exception ex) when (ex is PathTooLongException or NotSupportedException or ArgumentException) {
                 ErrorOut($"The path '{path}' is not a valid pathname.");
@@ -62,21 +71,24 @@ namespace CopadsExample {
     static class DiskUsage {
 
         public static List<string> CollectDirectories(string rootDir, bool parallel) {
-            ConcurrentBag<string> dirs = new ConcurrentBag<string>(Directory.GetDirectories(rootDir));
+            try {
+                ConcurrentBag<string> dirs = new ConcurrentBag<string>(Directory.GetDirectories(rootDir));
 
-            if(parallel) {
-                Parallel.ForEach(dirs, subdir => {
-                    List<string> subdirs = CollectDirectories(subdir, parallel);
-                    dirs.AddAll(subdirs);
-                });
-            } else {
-                foreach(string subdir in dirs) {
-                    List<string> subdirs = CollectDirectories(subdir, parallel);
-                    dirs.AddAll(subdirs);
+                if(parallel) {
+                    Parallel.ForEach(dirs, subdir => {
+                        List<string> subdirs = CollectDirectories(subdir, parallel);
+                        dirs.AddAll(subdirs);
+                    });
+                } else {
+                    foreach(string subdir in dirs) {
+                        List<string> subdirs = CollectDirectories(subdir, parallel);
+                        dirs.AddAll(subdirs);
+                    }
                 }
+                return new List<string>(dirs);
+            } catch(UnauthorizedAccessException uae) {
+                return new List<string>();
             }
-
-            return new List<string>(dirs);
         }
 
         public static List<string> CollectFiles(List<string> dirs, bool parallel) {
@@ -84,11 +96,11 @@ namespace CopadsExample {
 
             if(parallel) {
                 Parallel.ForEach(dirs, dir => {
-                    files.AddAll(new List<string>(Directory.GetFiles(dir)));
+                    files.SafeAddAllFiles(dir);
                 });
             } else {
                 foreach(string dir in dirs) {
-                    files.AddAll(new List<string>(Directory.GetFiles(dir)));
+                    files.SafeAddAllFiles(dir);
                 }
             }
             return new List<string>(files);
@@ -97,14 +109,12 @@ namespace CopadsExample {
         public static void Main(string[] args) {
 
             ArgumentHelper.ValidateArgumentList(args);
-            //0 = -s, 1 = -d, 2 = -b
             string parallelism = ArgumentHelper.ValidateParallelism(args[0]);
             string rootDir = ArgumentHelper.ValidatePath(args[1]);
 
             if(parallelism == "-s") {
                 CalculateDiskUsage(rootDir, false);
-            }
-            else if(parallelism == "-d") {
+            } else if(parallelism == "-d") {
                 CalculateDiskUsage(rootDir, true);
             } else if(parallelism == "-b") {
                 CalculateDiskUsage(rootDir, false);
