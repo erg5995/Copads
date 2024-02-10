@@ -126,6 +126,8 @@ namespace CopadsExample {
         public static void CalculateDiskUsage(string rootDir, bool parallel) {
 
             long totalSize = 0;
+            long imageSize = 0;
+            int images = 0;
 
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
@@ -133,9 +135,14 @@ namespace CopadsExample {
             List<string> dirs = CollectDirectories(rootDir, parallel);
             List<string> files = CollectFiles(dirs, parallel);
 
+
             if(parallel) {
                 Parallel.ForEach(files, file => {
                     long size = new FileInfo(file).Length;
+                    if(file.EndsWith(".png") || file.EndsWith(".jpg") || file.EndsWith(".jpeg") || file.EndsWith(".webp")) {
+                        Interlocked.Add(ref imageSize, size);
+                        Interlocked.Increment(ref images);
+                    }
                     Interlocked.Add(ref totalSize, size);
                 });
             } else {
@@ -155,6 +162,7 @@ namespace CopadsExample {
             );
             Console.WriteLine($"{(parallel ? "Parallel" : "Sequential")} Calculated in: {elapsedTime}");
             Console.WriteLine($"{dirs.Count:n0} folders, {files.Count:n0} files, {totalSize:n0} bytes");
+            Console.WriteLine($"\n{images:n0} image files: {imageSize:n0} bytes");
         }
     }
 }
