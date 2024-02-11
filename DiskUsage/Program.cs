@@ -1,6 +1,8 @@
 ﻿using System.Collections.Concurrent;
 
 namespace Extensions {
+
+    using DiskUsage;
     static class Extensions {
         public static void AddAll<T>(this ConcurrentBag<T> bag, List<T> items) {
             foreach(T item in items) {
@@ -12,7 +14,8 @@ namespace Extensions {
             List<string> files = new List<string>();
             try {
                 files.AddRange(Directory.GetFiles(dir));
-            } catch(UnauthorizedAccessException uae) {
+            } catch(Exception e) when (e is UnauthorizedAccessException or IOException or AggregateException) {
+                if(DiskUsage.DisplayWarnings)
                 Console.WriteLine($"Warning: Permission not granted to read from {dir}");
             }
             bag.AddAll(files);
@@ -20,7 +23,7 @@ namespace Extensions {
     }
 }
 
-namespace CopadsExample {
+namespace DiskUsage {
     using System.Diagnostics;
     using Extensions;
 
@@ -28,11 +31,13 @@ namespace CopadsExample {
 
         // Help message conforms to Microsoft Command-Line Syntax: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/command-line-syntax-key
         private static readonly string helpMessage = 
-        @"Usage: dotnet run {-s|-d|-b} path
+        @"Usage: dotnet run {-s|-d|-b} path [-w]
         -s      Run in single threaded mode
         -d      Run in parallel mode (uses all available processors)
         -b      Run in both parallel and single threaded mode.
-                Runs parallel followed by sequential mode";
+                Runs parallel followed by sequential mode
+        path    Root directory to index from
+        -w      Display warnings";
 
         public static void ErrorOut(string message) {
             Console.WriteLine(message + "\n" + helpMessage);
@@ -40,12 +45,12 @@ namespace CopadsExample {
         }
 
         public static void ValidateArgumentList(string[] args) {
-            if (args.Length < 1 || args.Length > 2) {
-                ErrorOut("Argument list does not match required number of arguments.");
+            if (args.Length < 2 || args.Length > 3) {
+                ErrorOut("Actual and required argument lists differ in length.");
             }
         }
 
-        public static string ValidateParallelism(string parallelism) {
+        public static string ValidateParallelismFlag(string parallelism) {
             if(!(parallelism == "-s" || parallelism == "-d" || parallelism == "-b")) {
                 ErrorOut($"Invalid flag: {parallelism}");
             }
@@ -56,7 +61,7 @@ namespace CopadsExample {
             try {
                 FileInfo fi = new FileInfo(path);
             }
-            catch (Exception ex) when (ex is PathTooLongException or NotSupportedException or ArgumentException) {
+            catch (Exception e) when (e is PathTooLongException or NotSupportedException or ArgumentException) {
                 ErrorOut($"The path '{path}' is not a valid pathname.");
             }
 
@@ -67,8 +72,18 @@ namespace CopadsExample {
             return path;
         }
 
+        public static void ValidateWarningsFlag(string warnings) {
+            if(warnings != "-w") {
+                ErrorOut($"Invalid flag:{warnings}\nValid options are: -w");
+            } else {
+                DiskUsage.DisplayWarnings = true;
+            }
+        }
+
     }
     static class DiskUsage {
+
+        public static bool DisplayWarnings = false;
 
         public static List<string> CollectDirectories(string rootDir, bool parallel) {
             try {
@@ -86,7 +101,7 @@ namespace CopadsExample {
                     }
                 }
                 return new List<string>(dirs);
-            } catch(UnauthorizedAccessException uae) {
+            } catch(Exception e) when (e is UnauthorizedAccessException or IOException or AggregateException) {
                 return new List<string>();
             }
         }
@@ -109,8 +124,11 @@ namespace CopadsExample {
         public static void Main(string[] args) {
 
             ArgumentHelper.ValidateArgumentList(args);
-            string parallelism = ArgumentHelper.ValidateParallelism(args[0]);
+            string parallelism = ArgumentHelper.ValidateParallelismFlag(args[0]);
             string rootDir = ArgumentHelper.ValidatePath(args[1]);
+            if(args.Length == 3) {
+                ArgumentHelper.ValidateWarningsFlag(args[2]);
+            }
 
             if(parallelism == "-s") {
                 CalculateDiskUsage(rootDir, false);
@@ -168,18 +186,28 @@ namespace CopadsExample {
 
             if(parallel) {
                 Parallel.ForEach(files, file => {
-                    long size = new FileInfo(file).Length;
-                    string file_extension = file.Split(".").Last();
-                    if(image_extensions.Contains("." + file_extension)) {
-                        Interlocked.Add(ref imageSize, size);
-                        Interlocked.Increment(ref images);
+                    try {
+                        long size = new FileInfo(file).Length;
+                        string file_extension = file.Split(".").Last();
+                        if(image_extensions.Contains("." + file_extension)) {
+                            Interlocked.Add(ref imageSize, size);
+                            Interlocked.Increment(ref images);
+                        }
+                        Interlocked.Add(ref totalSize, size);
+                    } catch (IOException) {
+                        if(DisplayWarnings)
+                            Console.WriteLine($"Warning: {file} was moved during indexing.");
                     }
-                    Interlocked.Add(ref totalSize, size);
                 });
             } else {
                 foreach(string file in files) {
-                    long size = new FileInfo(file).Length;
-                    totalSize += size;
+                    try {
+                        long size = new FileInfo(file).Length;
+                        totalSize += size;
+                    } catch (IOException) {
+                        if(DisplayWarnings)
+                            Console.WriteLine($"Warning {file} was moved during indexing.");
+                    }
                 }
             }
 
