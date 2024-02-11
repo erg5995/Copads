@@ -193,7 +193,11 @@ namespace CopadsExample {
             );
             Console.WriteLine($"{(parallel ? "Parallel" : "Sequential")} Calculated in: {elapsedTime}");
             Console.WriteLine($"{dirs.Count:n0} folders, {files.Count:n0} files, {totalSize:n0} bytes");
-            Console.WriteLine($"\n{images:n0} image files: {imageSize:n0} bytes");
+            if(images > 0) {
+                Console.WriteLine($"\n{images:n0} image files: {imageSize:n0} bytes");
+            } else {
+                Console.WriteLine($"No image files found under {rootDir}");
+            }
         }
     }
 }
