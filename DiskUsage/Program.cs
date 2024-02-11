@@ -135,11 +135,42 @@ namespace CopadsExample {
             List<string> dirs = CollectDirectories(rootDir, parallel);
             List<string> files = CollectFiles(dirs, parallel);
 
+            string[] image_extensions = new string[] {
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".gif",
+                ".tiff",
+                ".bmp",
+                ".svg",
+                ".webp",
+                ".heif",
+                ".heic",
+                ".raw",
+                ".cr2",
+                ".nef",
+                ".orf",
+                ".sr2",
+                ".arw",
+                ".dng",
+                ".eps",
+                ".ico",
+                ".jfif",
+                ".psd",
+                ".tif",
+                ".xcf",
+                ".ai",
+                ".cdr",
+                ".indd",
+                ".webm"
+            };
+
 
             if(parallel) {
                 Parallel.ForEach(files, file => {
                     long size = new FileInfo(file).Length;
-                    if(file.EndsWith(".png") || file.EndsWith(".jpg") || file.EndsWith(".jpeg") || file.EndsWith(".webp")) {
+                    string file_extension = file.Split(".").Last();
+                    if(image_extensions.Contains("." + file_extension)) {
                         Interlocked.Add(ref imageSize, size);
                         Interlocked.Increment(ref images);
                     }
