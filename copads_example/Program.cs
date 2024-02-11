@@ -58,9 +58,11 @@ namespace CopadsExample {
 
             string rootDir = args[0];
 
-            for(; simultaneousThreads <= maxThreads; simultaneousThreads++) {
-                test(rootDir);
-            }
+            // for(; simultaneousThreads <= maxThreads; simultaneousThreads++) {
+            //     test(rootDir);
+            // }
+            simultaneousThreads = maxThreads;
+            test(rootDir);
 
             
         }
