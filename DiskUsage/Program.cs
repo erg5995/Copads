@@ -31,22 +31,31 @@ namespace DiskUsage {
 
         // Help message conforms to Microsoft Command-Line Syntax: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/command-line-syntax-key
         private static readonly string helpMessage = 
-        @"Usage: dotnet run {-s|-d|-b} path [-w]
+        @"Usage: dotnet run [-w] {-s|-d|-b} path
+        -w      Display warnings when files/directories cannot be read (optional)
         -s      Run in single threaded mode
         -d      Run in parallel mode (uses all available processors)
         -b      Run in both parallel and single threaded mode.
                 Runs parallel followed by sequential mode
-        path    Root directory to index from
-        -w      Display warnings";
+        path    Root directory to index from";
 
         public static void ErrorOut(string message) {
             Console.WriteLine(message + "\n" + helpMessage);
             Environment.Exit(0);
         }
 
-        public static void ValidateArgumentList(string[] args) {
+        public static int ValidateArgumentList(string[] args) {
             if (args.Length < 2 || args.Length > 3) {
                 ErrorOut("Actual and required argument lists differ in length.");
+            }
+            return args.Length;
+        }
+
+        public static void ValidateWarningsFlag(string warnings) {
+            if(warnings != "-w") {
+                ErrorOut($"Invalid option:{warnings}\nValid options are: -w");
+            } else {
+                DiskUsage.DisplayWarnings = true;
             }
         }
 
@@ -70,14 +79,6 @@ namespace DiskUsage {
             }
 
             return path;
-        }
-
-        public static void ValidateWarningsFlag(string warnings) {
-            if(warnings != "-w") {
-                ErrorOut($"Invalid flag:{warnings}\nValid options are: -w");
-            } else {
-                DiskUsage.DisplayWarnings = true;
-            }
         }
 
     }
@@ -123,12 +124,14 @@ namespace DiskUsage {
 
         public static void Main(string[] args) {
 
-            ArgumentHelper.ValidateArgumentList(args);
-            string parallelism = ArgumentHelper.ValidateParallelismFlag(args[0]);
-            string rootDir = ArgumentHelper.ValidatePath(args[1]);
-            if(args.Length == 3) {
-                ArgumentHelper.ValidateWarningsFlag(args[2]);
+            int numArguments = ArgumentHelper.ValidateArgumentList(args);
+            int i = numArguments == 3 ? 0 : 1;
+            if(i == 0) {
+                ArgumentHelper.ValidateWarningsFlag(args[0]);
             }
+            string parallelism = ArgumentHelper.ValidateParallelismFlag(args[1 - i]);
+            string rootDir = ArgumentHelper.ValidatePath(args[2 - i]);
+            
 
             if(parallelism == "-s") {
                 CalculateDiskUsage(rootDir, false);
