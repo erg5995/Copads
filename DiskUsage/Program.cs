@@ -84,7 +84,87 @@ namespace DiskUsage {
     }
     static class DiskUsage {
 
+        public static readonly string[] IMAGE_EXTENSIONS = new string[] {
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".gif",
+                ".tiff",
+                ".bmp",
+                ".svg",
+                ".webp",
+                ".heif",
+                ".heic",
+                ".raw",
+                ".cr2",
+                ".nef",
+                ".orf",
+                ".sr2",
+                ".arw",
+                ".dng",
+                ".eps",
+                ".ico",
+                ".jfif",
+                ".psd",
+                ".tif",
+                ".xcf",
+                ".ai",
+                ".cdr",
+                ".indd",
+                ".webm"
+            };
+
         public static bool DisplayWarnings = false;
+
+        public static long TotalSize = 0;
+        public static int NumFiles = 0; 
+        public static long ImageSize = 0;
+        public static int NumImages = 0;
+        public static int NumFolders = 0;
+
+
+        public static void IndexDir(string dir, bool parallel) {
+            List<string> files = new List<string>();
+            List<string> subdirs = new List<string>();
+            try {
+                files = new List<string>(Directory.GetFiles(dir));
+                subdirs = new List<string>(Directory.GetDirectories(dir));
+            } catch(Exception e) when (e is UnauthorizedAccessException or IOException or AggregateException) {
+                if(DisplayWarnings)
+                    Console.WriteLine($"Warning: Permission not granted to read from {dir}");
+                return;
+            }
+            
+            if(parallel) {
+                Interlocked.Increment(ref NumFolders);
+                Parallel.ForEach(files, (file) => {
+                    Interlocked.Increment(ref NumFiles);
+                    long length = new FileInfo(file).Length;
+                    if(IMAGE_EXTENSIONS.Contains(file.Split('.').Last())) {
+                        Interlocked.Add(ref ImageSize, length);
+                        Interlocked.Increment(ref NumImages);
+                    }
+                    Interlocked.Add(ref TotalSize, length);
+                });
+                
+                Parallel.ForEach(subdirs, (subdir) => {
+                    IndexDir(subdir, parallel);
+                });
+            } else {
+                NumFolders++;
+                foreach(string file in files) {
+                    long length = new FileInfo(file).Length;
+                    if(IMAGE_EXTENSIONS.Contains(file.Split('.').Last())) {
+                        ImageSize += length;
+                        NumImages++;
+                    }
+                    TotalSize += length;
+                } 
+                foreach(string subdir in subdirs) {
+                    IndexDir(subdir, parallel);
+                }
+            }
+        }
 
         public static List<string> CollectDirectories(string rootDir, bool parallel) {
             try {
@@ -134,69 +214,39 @@ namespace DiskUsage {
             
 
             if(parallelism == "-s") {
-                CalculateDiskUsage(rootDir, false);
+                CalculateDiskUsageWithCache(rootDir, false);
+                CalculateDiskUsageWithAccumulation(rootDir, false);
             } else if(parallelism == "-d") {
-                CalculateDiskUsage(rootDir, true);
+                CalculateDiskUsageWithCache(rootDir, true);
+                CalculateDiskUsageWithAccumulation(rootDir, true);
             } else if(parallelism == "-b") {
-                CalculateDiskUsage(rootDir, false);
-                CalculateDiskUsage(rootDir, true);
+                CalculateDiskUsageWithCache(rootDir, true);
+                CalculateDiskUsageWithAccumulation(rootDir, true);
+                CalculateDiskUsageWithCache(rootDir, false);
+                CalculateDiskUsageWithAccumulation(rootDir, false);
             }
    
         }
 
-        public static void CalculateDiskUsage(string rootDir, bool parallel) {
-
-            long totalSize = 0;
-            long imageSize = 0;
-            int images = 0;
+        public static void CalculateDiskUsageWithCache(string rootDir, bool parallel) {
 
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
 
             List<string> dirs = CollectDirectories(rootDir, parallel);
+            dirs.Add(rootDir);
             List<string> files = CollectFiles(dirs, parallel);
-
-            string[] image_extensions = new string[] {
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".gif",
-                ".tiff",
-                ".bmp",
-                ".svg",
-                ".webp",
-                ".heif",
-                ".heic",
-                ".raw",
-                ".cr2",
-                ".nef",
-                ".orf",
-                ".sr2",
-                ".arw",
-                ".dng",
-                ".eps",
-                ".ico",
-                ".jfif",
-                ".psd",
-                ".tif",
-                ".xcf",
-                ".ai",
-                ".cdr",
-                ".indd",
-                ".webm"
-            };
-
 
             if(parallel) {
                 Parallel.ForEach(files, file => {
                     try {
-                        long size = new FileInfo(file).Length;
+                        long length = new FileInfo(file).Length;
                         string file_extension = file.Split(".").Last();
-                        if(image_extensions.Contains("." + file_extension)) {
-                            Interlocked.Add(ref imageSize, size);
-                            Interlocked.Increment(ref images);
+                        if(IMAGE_EXTENSIONS.Contains("." + file_extension)) {
+                            Interlocked.Add(ref ImageSize, length);
+                            Interlocked.Increment(ref NumImages);
                         }
-                        Interlocked.Add(ref totalSize, size);
+                        Interlocked.Add(ref TotalSize, length);
                     } catch (IOException) {
                         if(DisplayWarnings)
                             Console.WriteLine($"Warning: {file} was moved during indexing.");
@@ -206,7 +256,7 @@ namespace DiskUsage {
                 foreach(string file in files) {
                     try {
                         long size = new FileInfo(file).Length;
-                        totalSize += size;
+                        TotalSize += size;
                     } catch (IOException) {
                         if(DisplayWarnings)
                             Console.WriteLine($"Warning {file} was moved during indexing.");
@@ -219,16 +269,51 @@ namespace DiskUsage {
             TimeSpan ts = stopwatch.Elapsed;
 
             string elapsedTime = string.Format(
-                "{0:00}s.{1:000}ms",
-                ts.Seconds, ts.Milliseconds
+                "{0:000}s.{1:000}ms",
+                ts.Seconds + (60 * ts.Minutes), ts.Milliseconds
             );
-            Console.WriteLine($"{(parallel ? "Parallel" : "Sequential")} Calculated in: {elapsedTime}");
-            Console.WriteLine($"{dirs.Count:n0} folders, {files.Count:n0} files, {totalSize:n0} bytes");
-            if(images > 0) {
-                Console.WriteLine($"\n{images:n0} image files: {imageSize:n0} bytes");
+            Console.WriteLine($"{(parallel ? "Parallel" : "Sequential")} (Cache Method) Calculated in: {elapsedTime}");
+            Console.WriteLine($"{dirs.Count:n0} folders, {files.Count:n0} files, {TotalSize:n0} bytes");
+            if(NumImages > 0) {
+                Console.WriteLine($"{NumImages:n0} image files: {ImageSize:n0} bytes");
             } else {
                 Console.WriteLine($"No image files found under {rootDir}");
             }
+            Reset();
+        }
+
+        public static void CalculateDiskUsageWithAccumulation(string rootDir, bool parallel) {
+
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+
+            IndexDir(rootDir, parallel);
+
+            stopwatch.Stop();
+
+            TimeSpan ts = stopwatch.Elapsed;
+
+            string elapsedTime = string.Format(
+                "{0:000}s.{1:000}ms",
+                ts.Seconds + (60 * ts.Minutes), ts.Milliseconds
+            );
+            Console.WriteLine($"{(parallel ? "Parallel" : "Sequential")} (Accumulate Method) Calculated in: {elapsedTime}");
+            Console.WriteLine($"{NumFolders:n0} folders, {NumFiles:n0} files, {TotalSize:n0} bytes");
+            if(NumImages > 0) {
+                Console.WriteLine($"{NumImages:n0} image files: {ImageSize:n0} bytes");
+            } else {
+                Console.WriteLine($"No image files found under {rootDir}");
+            }
+            Reset();
+        }
+
+        public static void Reset() {
+            NumFiles = 0;
+            NumImages = 0;
+            NumFolders = 0;
+            TotalSize = 0;
+            ImageSize = 0;
+            Console.WriteLine();
         }
     }
 }
