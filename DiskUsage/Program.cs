@@ -1,30 +1,36 @@
 ﻿using System.Collections.Concurrent;
 
 namespace Extensions {
+    static class DirectoryWrapper {
 
-    using DiskUsage;
-    static class Extensions {
-        public static void AddAll<T>(this ConcurrentBag<T> bag, List<T> items) {
-            foreach(T item in items) {
-                bag.Add(item);
-            }
-        }
-
-        public static void SafeAddAllFiles(this ConcurrentBag<string> bag, string dir) {
-            List<string> files = new List<string>();
+        public static List<string> SafeGetFiles(string dir) {
             try {
-                files.AddRange(Directory.GetFiles(dir));
-            } catch(Exception e) when (e is UnauthorizedAccessException or IOException or AggregateException) {
-                if(DiskUsage.DisplayWarnings)
-                Console.WriteLine($"Warning: Permission not granted to read from {dir}");
+                return new List<string>(Directory.GetFiles(dir));
+            } catch(Exception ex) when (ex is UnauthorizedAccessException or IOException or AggregateException) {
+                if(DiskUsage.DiskUsage.DisplayWarnings) {
+                    Console.WriteLine($"Warning: Permission not granted to read files from {dir}");
+                }
+                return new List<string>();
             }
-            bag.AddAll(files);
         }
+
+        public static List<string> SafeGetDirectories(string dir) {
+            try {
+                return new List<string>(Directory.GetDirectories(dir));
+            } catch(Exception ex) when (ex is UnauthorizedAccessException or IOException or AggregateException) {
+                if(DiskUsage.DiskUsage.DisplayWarnings) {
+                    Console.WriteLine($"Warning: Permission not granted to read directories from {dir}");
+                }
+                return new List<string>();
+            }
+        }
+
     }
 }
 
 namespace DiskUsage {
     using System.Diagnostics;
+
     using Extensions;
 
     static class ArgumentHelper {
@@ -123,83 +129,39 @@ namespace DiskUsage {
         public static int NumFolders = 0;
 
 
-        public static void IndexDir(string dir, bool parallel) {
-            List<string> files = new List<string>();
-            List<string> subdirs = new List<string>();
-            try {
-                files = new List<string>(Directory.GetFiles(dir));
-                subdirs = new List<string>(Directory.GetDirectories(dir));
-            } catch(Exception e) when (e is UnauthorizedAccessException or IOException or AggregateException) {
-                if(DisplayWarnings)
-                    Console.WriteLine($"Warning: Permission not granted to read from {dir}");
-                return;
-            }
+        public static void IndexDirParallel(string dir) {
+            List<string> files = DirectoryWrapper.SafeGetFiles(dir);
+            List<string> subdirs = DirectoryWrapper.SafeGetDirectories(dir);
             
-            if(parallel) {
-                Interlocked.Increment(ref NumFolders);
-                Parallel.ForEach(files, (file) => {
-                    Interlocked.Increment(ref NumFiles);
-                    long length = new FileInfo(file).Length;
-                    if(IMAGE_EXTENSIONS.Contains(file.Split('.').Last())) {
-                        Interlocked.Add(ref ImageSize, length);
-                        Interlocked.Increment(ref NumImages);
-                    }
-                    Interlocked.Add(ref TotalSize, length);
-                });
-                
-                Parallel.ForEach(subdirs, (subdir) => {
-                    IndexDir(subdir, parallel);
-                });
-            } else {
-                NumFolders++;
-                foreach(string file in files) {
-                    long length = new FileInfo(file).Length;
-                    if(IMAGE_EXTENSIONS.Contains(file.Split('.').Last())) {
-                        ImageSize += length;
-                        NumImages++;
-                    }
-                    TotalSize += length;
-                } 
-                foreach(string subdir in subdirs) {
-                    IndexDir(subdir, parallel);
+            Interlocked.Increment(ref NumFolders);
+            Parallel.ForEach(files, (file) => {
+                Interlocked.Increment(ref NumFiles);
+                long length = new FileInfo(file).Length;
+                if(IMAGE_EXTENSIONS.Contains("." + file.Split('.').Last())) {
+                    Interlocked.Add(ref ImageSize, length);
+                    Interlocked.Increment(ref NumImages);
                 }
-            }
+                Interlocked.Add(ref TotalSize, length);
+            });
+            
+            Parallel.ForEach(subdirs, IndexDirParallel);
         }
 
-        public static List<string> CollectDirectories(string rootDir, bool parallel) {
-            try {
-                ConcurrentBag<string> dirs = new ConcurrentBag<string>(Directory.GetDirectories(rootDir));
+        public static void IndexDirSequential(string dir) {
+            List<string> files = DirectoryWrapper.SafeGetFiles(dir);
+            List<string> subdirs = DirectoryWrapper.SafeGetDirectories(dir);
 
-                if(parallel) {
-                    Parallel.ForEach(dirs, subdir => {
-                        List<string> subdirs = CollectDirectories(subdir, parallel);
-                        dirs.AddAll(subdirs);
-                    });
-                } else {
-                    foreach(string subdir in dirs) {
-                        List<string> subdirs = CollectDirectories(subdir, parallel);
-                        dirs.AddAll(subdirs);
-                    }
+            NumFolders++;
+            files.ForEach(file => {
+                NumFiles++;
+                long length = new FileInfo(file).Length;
+                if(IMAGE_EXTENSIONS.Contains("." + file.Split('.').Last())) {
+                    ImageSize += length;
+                    NumImages++;
                 }
-                return new List<string>(dirs);
-            } catch(Exception e) when (e is UnauthorizedAccessException or IOException or AggregateException) {
-                return new List<string>();
-            }
-        }
-
-        public static List<string> CollectFiles(List<string> dirs, bool parallel) {
-            ConcurrentBag<string> files = new ConcurrentBag<string>();
-
-            if(parallel) {
-                Parallel.ForEach(dirs, dir => {
-                    files.SafeAddAllFiles(dir);
-                });
-            } else {
-                foreach(string dir in dirs) {
-                    files.SafeAddAllFiles(dir);
-                }
-            }
-            return new List<string>(files);
+                TotalSize += length;
+            });
+            subdirs.ForEach(IndexDirSequential);
         }
 
         public static void Main(string[] args) {
@@ -211,57 +173,25 @@ namespace DiskUsage {
             }
             string parallelism = ArgumentHelper.ValidateParallelismFlag(args[1 - i]);
             string rootDir = ArgumentHelper.ValidatePath(args[2 - i]);
-            
 
             if(parallelism == "-s") {
-                CalculateDiskUsageWithCache(rootDir, false);
-                CalculateDiskUsageWithAccumulation(rootDir, false);
+                CalculateDiskUsage(rootDir, false);
             } else if(parallelism == "-d") {
-                CalculateDiskUsageWithCache(rootDir, true);
-                CalculateDiskUsageWithAccumulation(rootDir, true);
+                CalculateDiskUsage(rootDir, true);
             } else if(parallelism == "-b") {
-                CalculateDiskUsageWithCache(rootDir, true);
-                CalculateDiskUsageWithAccumulation(rootDir, true);
-                CalculateDiskUsageWithCache(rootDir, false);
-                CalculateDiskUsageWithAccumulation(rootDir, false);
+                CalculateDiskUsage(rootDir, true);
+                CalculateDiskUsage(rootDir, false);
             }
-   
         }
 
-        public static void CalculateDiskUsageWithCache(string rootDir, bool parallel) {
-
+        public static void CalculateDiskUsage(string rootDir, bool parallel) {
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
-
-            List<string> dirs = CollectDirectories(rootDir, parallel);
-            dirs.Add(rootDir);
-            List<string> files = CollectFiles(dirs, parallel);
 
             if(parallel) {
-                Parallel.ForEach(files, file => {
-                    try {
-                        long length = new FileInfo(file).Length;
-                        string file_extension = file.Split(".").Last();
-                        if(IMAGE_EXTENSIONS.Contains("." + file_extension)) {
-                            Interlocked.Add(ref ImageSize, length);
-                            Interlocked.Increment(ref NumImages);
-                        }
-                        Interlocked.Add(ref TotalSize, length);
-                    } catch (IOException) {
-                        if(DisplayWarnings)
-                            Console.WriteLine($"Warning: {file} was moved during indexing.");
-                    }
-                });
+                IndexDirParallel(rootDir);
             } else {
-                foreach(string file in files) {
-                    try {
-                        long size = new FileInfo(file).Length;
-                        TotalSize += size;
-                    } catch (IOException) {
-                        if(DisplayWarnings)
-                            Console.WriteLine($"Warning {file} was moved during indexing.");
-                    }
-                }
+                IndexDirSequential(rootDir);
             }
 
             stopwatch.Stop();
@@ -272,32 +202,7 @@ namespace DiskUsage {
                 "{0:000}s.{1:000}ms",
                 ts.Seconds + (60 * ts.Minutes), ts.Milliseconds
             );
-            Console.WriteLine($"{(parallel ? "Parallel" : "Sequential")} (Cache Method) Calculated in: {elapsedTime}");
-            Console.WriteLine($"{dirs.Count:n0} folders, {files.Count:n0} files, {TotalSize:n0} bytes");
-            if(NumImages > 0) {
-                Console.WriteLine($"{NumImages:n0} image files: {ImageSize:n0} bytes");
-            } else {
-                Console.WriteLine($"No image files found under {rootDir}");
-            }
-            Reset();
-        }
-
-        public static void CalculateDiskUsageWithAccumulation(string rootDir, bool parallel) {
-
-            Stopwatch stopwatch = new Stopwatch();
-            stopwatch.Start();
-
-            IndexDir(rootDir, parallel);
-
-            stopwatch.Stop();
-
-            TimeSpan ts = stopwatch.Elapsed;
-
-            string elapsedTime = string.Format(
-                "{0:000}s.{1:000}ms",
-                ts.Seconds + (60 * ts.Minutes), ts.Milliseconds
-            );
-            Console.WriteLine($"{(parallel ? "Parallel" : "Sequential")} (Accumulate Method) Calculated in: {elapsedTime}");
+            Console.WriteLine($"{(parallel ? "Parallel" : "Sequential")} Calculated in: {elapsedTime}");
             Console.WriteLine($"{NumFolders:n0} folders, {NumFiles:n0} files, {TotalSize:n0} bytes");
             if(NumImages > 0) {
                 Console.WriteLine($"{NumImages:n0} image files: {ImageSize:n0} bytes");
@@ -307,7 +212,7 @@ namespace DiskUsage {
             Reset();
         }
 
-        public static void Reset() {
+        private static void Reset() {
             NumFiles = 0;
             NumImages = 0;
             NumFolders = 0;
@@ -317,6 +222,3 @@ namespace DiskUsage {
         }
     }
 }
-
-
-
