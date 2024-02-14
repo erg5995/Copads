@@ -28,7 +28,7 @@ namespace Extensions {
     }
 
     static class FileInfoWrapper {
-        public static long Length(string path) {
+        public static long SafeLength(string path) {
             try {
                 return new FileInfo(path).Length;
             } catch(Exception ex) when (ex is UnauthorizedAccessException or IOException or AggregateException) {
@@ -150,7 +150,7 @@ namespace DiskUsage {
             Interlocked.Increment(ref NumFolders);
             Parallel.ForEach(files, (file) => {
                 Interlocked.Increment(ref NumFiles);
-                long length = new FileInfo(file).Length;
+                long length = FileInfoWrapper.SafeLength(file);
                 if(IMAGE_EXTENSIONS.Contains("." + file.Split('.').Last())) {
                     Interlocked.Add(ref ImageSize, length);
                     Interlocked.Increment(ref NumImages);
@@ -168,7 +168,7 @@ namespace DiskUsage {
             NumFolders++;
             files.ForEach(file => {
                 NumFiles++;
-                long length = new FileInfo(file).Length;
+                long length = FileInfoWrapper.SafeLength(file);
                 if(IMAGE_EXTENSIONS.Contains("." + file.Split('.').Last())) {
                     ImageSize += length;
                     NumImages++;
