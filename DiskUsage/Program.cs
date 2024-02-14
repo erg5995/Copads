@@ -26,6 +26,20 @@ namespace Extensions {
         }
 
     }
+
+    static class FileInfoWrapper {
+        public static long Length(string path) {
+            try {
+                return new FileInfo(path).Length;
+            } catch(Exception ex) when (ex is UnauthorizedAccessException or IOException or AggregateException) {
+                if(DiskUsage.DiskUsage.DisplayWarnings) {
+                    Console.WriteLine($"Warning: size of {path} could not be accessed");
+                }
+                return 0L;
+            }
+        }
+    }
+
 }
 
 namespace DiskUsage {
