@@ -1,6 +1,5 @@
-﻿using System.Collections.Concurrent;
-
-namespace Extensions {
+﻿namespace Extensions {
+    using FileTypeChecker.Extensions;
     static class DirectoryWrapper {
 
         public static List<string> SafeGetFiles(string dir) {
@@ -36,6 +35,23 @@ namespace Extensions {
                     Console.WriteLine($"Warning: size of {path} could not be accessed");
                 }
                 return 0L;
+            }
+        }
+    }
+
+    static class FileChecker {
+        public static bool IsImage(string path) {
+            try {
+                using(FileStream stream = File.OpenRead(path)) {
+                    bool ret = stream.IsImage();
+                    stream.Close();
+                    return ret;
+                }
+            } catch(Exception ex) when (ex is UnauthorizedAccessException or IOException or AggregateException) {
+                if(DiskUsage.DiskUsage.DisplayWarnings) {
+                    Console.WriteLine($"Warning: Possible image {path} will be skipped");
+                }
+                return false;
             }
         }
     }
@@ -104,36 +120,6 @@ namespace DiskUsage {
     }
     static class DiskUsage {
 
-        public static readonly string[] IMAGE_EXTENSIONS = new string[] {
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".gif",
-                ".tiff",
-                ".bmp",
-                ".svg",
-                ".webp",
-                ".heif",
-                ".heic",
-                ".raw",
-                ".cr2",
-                ".nef",
-                ".orf",
-                ".sr2",
-                ".arw",
-                ".dng",
-                ".eps",
-                ".ico",
-                ".jfif",
-                ".psd",
-                ".tif",
-                ".xcf",
-                ".ai",
-                ".cdr",
-                ".indd",
-                ".webm"
-            };
-
         public static bool DisplayWarnings = false;
 
         public static long TotalSize = 0;
@@ -151,7 +137,7 @@ namespace DiskUsage {
             Parallel.ForEach(files, (file) => {
                 Interlocked.Increment(ref NumFiles);
                 long length = FileInfoWrapper.SafeLength(file);
-                if(IMAGE_EXTENSIONS.Contains("." + file.Split('.').Last())) {
+                if(FileChecker.IsImage(file)) {
                     Interlocked.Add(ref ImageSize, length);
                     Interlocked.Increment(ref NumImages);
                 }
@@ -169,7 +155,7 @@ namespace DiskUsage {
             files.ForEach(file => {
                 NumFiles++;
                 long length = FileInfoWrapper.SafeLength(file);
-                if(IMAGE_EXTENSIONS.Contains("." + file.Split('.').Last())) {
+                if(FileChecker.IsImage(file)) {
                     ImageSize += length;
                     NumImages++;
                 }
