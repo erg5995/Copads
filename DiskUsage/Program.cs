@@ -5,7 +5,7 @@ namespace Extensions {
 
         public static List<string> SafeGetFiles(string dir) {
             try {
-                return new List<string>(Directory.GetFiles(dir));
+                return new List<string>(Directory.GetFiles(dir, "*", new EnumerationOptions {AttributesToSkip = FileAttributes.Hidden | FileAttributes.ReparsePoint}));
             } catch(Exception ex) when (ex is UnauthorizedAccessException or IOException or AggregateException) {
                 if(DiskUsage.DiskUsage.DisplayWarnings) {
                     Console.WriteLine($"Warning: Permission not granted to read files from {dir}");
@@ -16,7 +16,7 @@ namespace Extensions {
 
         public static List<string> SafeGetDirectories(string dir) {
             try {
-                return new List<string>(Directory.GetDirectories(dir));
+                return new List<string>(Directory.GetDirectories(dir, "*"));
             } catch(Exception ex) when (ex is UnauthorizedAccessException or IOException or AggregateException) {
                 if(DiskUsage.DiskUsage.DisplayWarnings) {
                     Console.WriteLine($"Warning: Permission not granted to read directories from {dir}");
