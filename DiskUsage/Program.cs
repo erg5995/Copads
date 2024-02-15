@@ -40,22 +40,44 @@
     }
 
     static class FileChecker {
+
+        public static readonly string[] IMAGE_EXTENSIONS = new string[] {
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".tiff",
+            ".bmp",
+            ".svg",
+            ".webp",
+            ".heif",
+            ".heic",
+            ".raw",
+            ".cr2",
+            ".nef",
+            ".orf",
+            ".sr2",
+            ".arw",
+            ".dng",
+            ".eps",
+            ".ico",
+            ".jfif",
+            ".psd",
+            ".tif",
+            ".xcf",
+            ".ai",
+            ".cdr",
+            ".indd",
+            ".webm"
+        };
+
         public static bool IsImage(string path) {
-            try {
-                using(FileStream stream = File.OpenRead(path)) {
-                    bool ret = stream.IsImage();
-                    stream.Close();
-                    return ret;
-                }
-            } catch(Exception ex) when (ex is UnauthorizedAccessException or IOException or AggregateException) {
-                if(DiskUsage.DiskUsage.DisplayWarnings) {
-                    Console.WriteLine($"Warning: Possible image {path} will be skipped");
-                }
-                return false;
-            }
+            if(IMAGE_EXTENSIONS.Contains(Path.GetExtension(path).ToLowerInvariant())) {
+                return true;
+            } 
+            return false;
         }
     }
-
 }
 
 namespace DiskUsage {
