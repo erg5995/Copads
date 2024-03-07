@@ -34,7 +34,7 @@ namespace Extensions {
         }
 
         //https://stackoverflow.com/a/68593532/13471744
-        public static BigInteger NextBigInteger(this Random random, BigInteger minValue, BigInteger maxValue) {
+        public static BigInteger NextBigInteger(BigInteger minValue, BigInteger maxValue) {
             if (minValue > maxValue) throw new ArgumentException();
             if (minValue == maxValue) return minValue;
             BigInteger zeroBasedUpperBound = maxValue - 1 - minValue; // Inclusive
@@ -55,7 +55,7 @@ namespace Extensions {
             }
         }
 
-        public static BigInteger NextPositiveBigInteger(this Random random, int numBytes) {
+        public static BigInteger NextPositiveBigInteger(int numBytes) {
             byte[] bytes = new byte[numBytes];
             System.Security.Cryptography.RandomNumberGenerator.Create().GetBytes(bytes);
             //To get a positive number we have to brown out the first
@@ -74,10 +74,9 @@ namespace Extensions {
             BigInteger s = BigInteger.Subtract(num, BigInteger.One);
             while (s % 2 == 0) s >>= 1; //Factor powers of 2 from n - 1
 
-            Random r = new Random();
             for (int i = 0; i < k; i++)
             {
-                BigInteger a = r.NextBigInteger(2, num - 1);
+                BigInteger a = NextBigInteger(2, num - 1);
                 BigInteger x = BigInteger.ModPow(a, s, num);
                 BigInteger y = BigInteger.One;
                 for(int n = 0; n < s; n++) {
@@ -145,9 +144,16 @@ namespace NumGen {
         }
 
         public static void ValidateArgumentList(string[] args) {
-            if(args.Count() != 2 && args.Count() != 3) {
+            if(args.Count() != 2 && args.Count() != 3 && args.Count() != 4) {
                 ErrorOut($"Actual ({args.Count()}) and required (2|3) argument lists differ in length.");
             }
+        }
+
+        public static bool ValidateSequential(string arg) {
+            if(arg == "-s") {
+                return true;
+            }
+            return false;
         }
 
         public static int ValidateBits(string arg) {
@@ -191,14 +197,16 @@ namespace NumGen {
 
         public static int BITS = 32;
         public static int COUNT = 1;
+        public static bool SEQ = false;
         
         public static readonly ConcurrentPrintBuffer buffer = new ConcurrentPrintBuffer();
 
         public static void Main(string[] args) {
             ArgumentHelper.ValidateArgumentList(args);
-            BITS = ArgumentHelper.ValidateBits(args[0]);
-            string option = ArgumentHelper.ValidateOption(args[1]);
-            COUNT = ArgumentHelper.ValidateCount(args.Count() > 2 ? args[2] : null);
+            SEQ = ArgumentHelper.ValidateSequential(args[0]);
+            BITS = ArgumentHelper.ValidateBits(args[1]);
+            string option = ArgumentHelper.ValidateOption(args[2]);
+            COUNT = ArgumentHelper.ValidateCount(args.Count() > 3 ? args[3] : null);
 
             buffer.AddLine("BitLength: " + BITS);
 
@@ -214,25 +222,48 @@ namespace NumGen {
                 ts.Hours, ts.Minutes, ts.Seconds, ts.Microseconds
             );
 
-            buffer.AddLine($"\nTime to Generate: {elapsedTime}");
+            buffer.AddLine($"Time to Generate: {elapsedTime}");
             buffer.Print();
         }
 
         public static TimeSpan GeneratePrimes() {
-            return new TimeSpan();
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+
+            if(SEQ) {
+                for(int i = 0; i < COUNT; i++) {
+                    BigInteger num = BigIntegerExtensions.NextPositiveBigInteger(BITS / 8);
+                    while(!num.isProbablyPrime()) {
+                        buffer.AddResult(num.ToString());
+                    }
+                }
+            } else {
+
+            }
+
+            stopwatch.Stop();
+            return stopwatch.Elapsed;
         }
 
         public static TimeSpan FactorOddNumbers() {
-            Random random = new Random();
 
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
 
-            for(int i = 0; i < COUNT; i++) {
-                BigInteger odd = random.NextPositiveBigInteger(BITS / 8);
-                int factors = CountFactors(odd);
-                string result = $"{odd}\nNumber of factors: {factors}";
-                buffer.AddResult(result);
+            if(SEQ) {
+                for(int i = 0; i < COUNT; i++) {
+                    BigInteger odd = BigIntegerExtensions.NextPositiveBigInteger(BITS / 8);
+                    int factors = CountFactors(odd);
+                    string result = $"{odd}\nNumber of factors: {factors}";
+                    buffer.AddResult(result);
+                };
+            } else {
+                Parallel.For(0, COUNT, (i) => {
+                    BigInteger odd = BigIntegerExtensions.NextPositiveBigInteger(BITS / 8);
+                    int factors = CountFactors(odd);
+                    string result = $"{odd}\nNumber of factors: {factors}";
+                    buffer.AddResult(result);
+                });
             }
             
             stopwatch.Stop();
