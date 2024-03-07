@@ -39,11 +39,10 @@ namespace Extensions {
             BigInteger zeroBasedUpperBound = maxValue - 1 - minValue; // Inclusive
             byte[] bytes = zeroBasedUpperBound.ToByteArray();
 
-            // Search for the most significant non-zero bit
             byte lastByteMask = 0b11111111;
             for (byte mask = 0b10000000; mask > 0; mask >>= 1, lastByteMask >>= 1)
             {
-                if ((bytes[bytes.Length - 1] & mask) == mask) break; // We found it
+                if ((bytes[bytes.Length - 1] & mask) == mask) break;
             }
 
             while (true)
