@@ -47,25 +47,42 @@ namespace Extensions {
 
             while (true)
             {
-                random.NextBytes(bytes);
+                System.Security.Cryptography.RandomNumberGenerator.Create().GetBytes(bytes);
                 bytes[bytes.Length - 1] &= lastByteMask;
                 var result = new BigInteger(bytes);
                 if (result <= zeroBasedUpperBound) return result + minValue;
             }
         }
 
-        public static bool isProbablyPrime(this BigInteger n) {
-            int k = 4;
-            if ((n < 2) || (n % 2 == 0)) return (n == 2);
+        public static BigInteger NextBigInteger(this Random random, int numBytes) {
+            byte[] bytes = new byte[numBytes];
+            System.Security.Cryptography.RandomNumberGenerator.Create().GetBytes(bytes);
+            return new BigInteger(bytes);
+        }
 
-            BigInteger s = BigInteger.Subtract(n, BigInteger.One);
-            while (s % 2 == 0) s >>= 1;
+        public static bool isProbablyPrime(this BigInteger num) {
+            int k = 4;
+            if ((num < 2) || (num % 2 == 0)) return (num == 2);
+
+            BigInteger s = BigInteger.Subtract(num, BigInteger.One);
+            while (s % 2 == 0) s >>= 1; //Factor powers of 2 from n - 1
 
             Random r = new Random();
             for (int i = 0; i < k; i++)
             {
-                BigInteger a = r.NextBigInteger(2, n - 1);
-                BigInteger x = BigInteger.ModPow(a, s, n);
+                BigInteger a = r.NextBigInteger(2, num - 1);
+                BigInteger x = BigInteger.ModPow(a, s, num);
+                BigInteger y = BigInteger.One;
+                for(int n = 0; n < s; n++) {
+                    y = BigInteger.ModPow(x, 2, n);
+                    if(y == 1 && x != 1 && x != n - 1) {
+                        return false;
+                    }
+                    x = y;
+                }
+                if(y != 1) {
+                    return false;
+                }
             }
             return true;
         }
@@ -73,8 +90,10 @@ namespace Extensions {
 }
 
 namespace NumGen {
-
+    using System.Diagnostics;
+    using System.Text;
     using Extensions;
+    using Microsoft.VisualBasic;
 
     public static class ArgumentHelper {
         
@@ -136,6 +155,8 @@ namespace NumGen {
 
         public static int BITS = 32;
         public static int COUNT = 1;
+        
+        public static readonly StringBuilder PRINT_BUFFER = new StringBuilder();
 
         public static void Main(string[] args) {
             ArgumentHelper.ValidateArgumentList(args);
@@ -143,18 +164,56 @@ namespace NumGen {
             string option = ArgumentHelper.ValidateOption(args[1]);
             COUNT = ArgumentHelper.ValidateCount(args.Count() > 2 ? args[2] : null);
 
-            System.Security.Cryptography.RandomNumberGenerator.Create().GetBytes(new byte[NumGen.BITS / 8]);
+            PRINT_BUFFER.AppendLine("BitLength: " + BITS);
+
+            TimeSpan ts;
+            if(option == "odd") {
+                ts = FactorOddNumbers();
+            } else {
+                ts = GeneratePrimes();
+            }
+
+            string elapsedTime = string.Format(
+                "{0:00}:{1:00}:{2:00}.{3:000000}",
+                ts.Hours, ts.Minutes, ts.Seconds, ts.Microseconds
+            );
+
+            PRINT_BUFFER.AppendLine($"Time to Generate: {elapsedTime}");
+            Console.WriteLine(PRINT_BUFFER);
         }
 
-        public static void CountFactors(BigInteger n) {
+        public static TimeSpan GeneratePrimes() {
+            return new TimeSpan();
+        }
+
+        public static TimeSpan FactorOddNumbers() {
+            Random random = new Random();
+
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+
+            for(int i = 0; i < COUNT; i++) {
+                BigInteger odd = random.NextBigInteger(BITS / 8);
+                PRINT_BUFFER.AppendLine($"{i}: {odd.ToString()}");
+                int factors = CountFactors(odd);
+                PRINT_BUFFER.AppendLine($"Number of factors: {factors}");
+            }
+            
+            stopwatch.Stop();
+            return stopwatch.Elapsed;
+        }
+
+        public static int CountFactors(BigInteger n) {
+            int numFactors = 0;
             for (int i = 1; i <= n.Sqrt(); i++) { 
                 if (n % i == 0) { 
                     if (n / i == i) 
-                        Console.Write(i + " "); 
+                        numFactors++;
                     else 
-                        Console.Write(i + " " + n / i + " "); 
+                        numFactors += 2;
                 } 
             } 
+            return numFactors;
         }
 
     } 
