@@ -194,7 +194,7 @@ namespace NumGen {
 
             for(int i = 0; i < COUNT; i++) {
                 BigInteger odd = random.NextBigInteger(BITS / 8);
-                PRINT_BUFFER.AppendLine($"{i}: {odd.ToString()}");
+                PRINT_BUFFER.AppendLine($"{i + 1}: {odd.ToString()}");
                 int factors = CountFactors(odd);
                 PRINT_BUFFER.AppendLine($"Number of factors: {factors}");
             }
