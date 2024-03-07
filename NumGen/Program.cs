@@ -3,7 +3,7 @@
 using System.Numerics;
 
 namespace Extensions {
-
+    using System.Text;
     using NumGen;
 
     public static class BigIntegerExtensions {
@@ -23,6 +23,7 @@ namespace Extensions {
                 return root;
             }
 
+            Console.WriteLine(n);
             throw new ArithmeticException("NaN");
         }
 
@@ -54,9 +55,15 @@ namespace Extensions {
             }
         }
 
-        public static BigInteger NextBigInteger(this Random random, int numBytes) {
+        public static BigInteger NextPositiveBigInteger(this Random random, int numBytes) {
             byte[] bytes = new byte[numBytes];
             System.Security.Cryptography.RandomNumberGenerator.Create().GetBytes(bytes);
+            //To get a positive number we have to brown out the first
+            //bit (sign bit) of the MSB
+            //For some reason BigInteger stores bytes in little endian,
+            //so the MSB is the rightmost byte
+            bytes[numBytes-1] &= 0b01111111;
+
             return new BigInteger(bytes);
         }
 
@@ -93,7 +100,36 @@ namespace NumGen {
     using System.Diagnostics;
     using System.Text;
     using Extensions;
-    using Microsoft.VisualBasic;
+
+    public class ConcurrentPrintBuffer {
+        private int count;
+        private StringBuilder sb;
+
+        public ConcurrentPrintBuffer() {
+            count = 0;
+            sb = new StringBuilder();
+        }
+
+        public void AddLine(string line) {
+            lock(this) {
+                sb.AppendLine(line);
+            }
+        }
+
+        public void AddResult(string result) {
+            lock(this) {
+                if(count > 0) {
+                    sb.AppendLine();
+                }
+                result = count++ + 1 + ": " + result;
+                sb.AppendLine(result);
+            }
+        }
+
+        public void Print() {
+            Console.WriteLine(sb.ToString());
+        }
+    }
 
     public static class ArgumentHelper {
         
@@ -156,7 +192,7 @@ namespace NumGen {
         public static int BITS = 32;
         public static int COUNT = 1;
         
-        public static readonly StringBuilder PRINT_BUFFER = new StringBuilder();
+        public static readonly ConcurrentPrintBuffer buffer = new ConcurrentPrintBuffer();
 
         public static void Main(string[] args) {
             ArgumentHelper.ValidateArgumentList(args);
@@ -164,7 +200,7 @@ namespace NumGen {
             string option = ArgumentHelper.ValidateOption(args[1]);
             COUNT = ArgumentHelper.ValidateCount(args.Count() > 2 ? args[2] : null);
 
-            PRINT_BUFFER.AppendLine("BitLength: " + BITS);
+            buffer.AddLine("BitLength: " + BITS);
 
             TimeSpan ts;
             if(option == "odd") {
@@ -178,8 +214,8 @@ namespace NumGen {
                 ts.Hours, ts.Minutes, ts.Seconds, ts.Microseconds
             );
 
-            PRINT_BUFFER.AppendLine($"Time to Generate: {elapsedTime}");
-            Console.WriteLine(PRINT_BUFFER);
+            buffer.AddLine($"\nTime to Generate: {elapsedTime}");
+            buffer.Print();
         }
 
         public static TimeSpan GeneratePrimes() {
@@ -193,10 +229,10 @@ namespace NumGen {
             stopwatch.Start();
 
             for(int i = 0; i < COUNT; i++) {
-                BigInteger odd = random.NextBigInteger(BITS / 8);
-                PRINT_BUFFER.AppendLine($"{i + 1}: {odd.ToString()}");
+                BigInteger odd = random.NextPositiveBigInteger(BITS / 8);
                 int factors = CountFactors(odd);
-                PRINT_BUFFER.AppendLine($"Number of factors: {factors}");
+                string result = $"{odd}\nNumber of factors: {factors}";
+                buffer.AddResult(result);
             }
             
             stopwatch.Stop();
