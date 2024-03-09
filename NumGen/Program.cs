@@ -101,14 +101,17 @@ namespace Extensions {
 
 namespace NumGen {
     using System.Diagnostics;
+    using System.Reflection;
+    using System.Security.Authentication;
     using System.Text;
     using Extensions;
 
-    public class ConcurrentPrintBuffer {
-        private int count;
+    public class StringBuilderWrapper {
+        private int count, max;
         private StringBuilder sb;
 
-        public ConcurrentPrintBuffer() {
+        public StringBuilderWrapper(int max) {
+            this.max = max;
             count = 0;
             sb = new StringBuilder();
         }
@@ -121,11 +124,13 @@ namespace NumGen {
 
         public void AddResult(string result) {
             lock(this) {
-                if(count > 0) {
-                    sb.AppendLine();
+                if(count < max) {
+                    if(count > 0) {
+                        sb.AppendLine();
+                    }
+                    result = count++ + 1 + ": " + result;
+                    sb.AppendLine(result);
                 }
-                result = count++ + 1 + ": " + result;
-                sb.AppendLine(result);
             }
         }
 
@@ -148,17 +153,11 @@ namespace NumGen {
         }
 
         public static void ValidateArgumentList(string[] args) {
-            if(args.Count() != 2 && args.Count() != 3 && args.Count() != 4) {
+            if(args.Count() != 2 && args.Count() != 3) {
                 ErrorOut($"Actual ({args.Count()}) and required (2|3) argument lists differ in length.");
             }
         }
 
-        public static bool ValidateSequential(string arg) {
-            if(arg == "-s") {
-                return true;
-            }
-            return false;
-        }
 
         public static int ValidateBits(string arg) {
             int bits;
@@ -201,17 +200,16 @@ namespace NumGen {
 
         public static int BITS = 32;
         public static int COUNT = 1;
-        public static bool SEQ = false;
         
-        public static readonly ConcurrentPrintBuffer buffer = new ConcurrentPrintBuffer();
+        public static StringBuilderWrapper buffer;
 
         public static void Main(string[] args) {
             ArgumentHelper.ValidateArgumentList(args);
-            SEQ = ArgumentHelper.ValidateSequential(args[0]);
-            BITS = ArgumentHelper.ValidateBits(args[1]);
-            string option = ArgumentHelper.ValidateOption(args[2]);
-            COUNT = ArgumentHelper.ValidateCount(args.Count() > 3 ? args[3] : null);
+            BITS = ArgumentHelper.ValidateBits(args[0]);
+            string option = ArgumentHelper.ValidateOption(args[1]);
+            COUNT = ArgumentHelper.ValidateCount(args.Count() > 2 ? args[2] : null);
 
+            buffer = new StringBuilderWrapper(COUNT); 
             buffer.AddLine("BitLength: " + BITS);
 
             TimeSpan ts;
@@ -231,23 +229,27 @@ namespace NumGen {
         }
 
         public static TimeSpan GeneratePrimes() {
+
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
 
-            if(SEQ) {
-                for(int i = 0; i < COUNT; i++) {
-                    BigInteger num = BigIntegerExtensions.NextPositiveBigInteger(BITS / 8);
-                    while(!num.isProbablyPrime()) {
-                        num = BigIntegerExtensions.NextPositiveBigInteger(BITS / 8);
-                    }
-                    buffer.AddResult(num.ToString());
-                }
-            } else {
-
+            for(int i = 0; i < COUNT; i++) {
+                ThreadPool.QueueUserWorkItem(FindPrime);
             }
+
+            while(ThreadPool.CompletedWorkItemCount < COUNT);
 
             stopwatch.Stop();
             return stopwatch.Elapsed;
+        }
+
+        //WaitCallback Delegate for ThreadPool
+        public static void FindPrime(object? stateInfo) {
+            BigInteger num = BigIntegerExtensions.NextPositiveBigInteger(BITS / 8);
+            while(!num.isProbablyPrime()) {
+                num = BigIntegerExtensions.NextPositiveBigInteger(BITS / 8);
+            }
+            buffer.AddResult(num.ToString());
         }
 
         public static TimeSpan FactorOddNumbers() {
@@ -255,21 +257,13 @@ namespace NumGen {
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
 
-            if(SEQ) {
-                for(int i = 0; i < COUNT; i++) {
-                    BigInteger odd = BigIntegerExtensions.NextPositiveBigInteger(BITS / 8);
-                    int factors = CountFactors(odd);
-                    string result = $"{odd}\nNumber of factors: {factors}";
-                    buffer.AddResult(result);
-                };
-            } else {
-                Parallel.For(0, COUNT, (i) => {
-                    BigInteger odd = BigIntegerExtensions.NextPositiveBigInteger(BITS / 8);
-                    int factors = CountFactors(odd);
-                    string result = $"{odd}\nNumber of factors: {factors}";
-                    buffer.AddResult(result);
-                });
-            }
+            for(int i = 0; i < COUNT; i++) {
+                BigInteger odd = BigIntegerExtensions.NextPositiveBigInteger(BITS / 8);
+                int factors = CountFactors(odd);
+                string result = $"{odd}\nNumber of factors: {factors}";
+                buffer.AddResult(result);
+            };
+
             
             stopwatch.Stop();
             return stopwatch.Elapsed;
