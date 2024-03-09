@@ -68,20 +68,24 @@ namespace Extensions {
         }
 
         public static bool isProbablyPrime(this BigInteger num) {
-            int k = 4;
-            if ((num < 2) || (num % 2 == 0)) return (num == 2);
+            int k = 5;
+            if ((num < 2) || (num % 2 == 0)) return num == 2;
 
-            BigInteger s = BigInteger.Subtract(num, BigInteger.One);
-            while (s % 2 == 0) s >>= 1; //Factor powers of 2 from n - 1
+            BigInteger d = BigInteger.Subtract(num, BigInteger.One);
+            int s = 0;
+            while (d % 2 == 0) {
+                d >>= 1; //Factor powers of 2 from n - 1
+                s++;
+            }
 
             for (int i = 0; i < k; i++)
             {
                 BigInteger a = NextBigInteger(2, num - 1);
-                BigInteger x = BigInteger.ModPow(a, s, num);
+                BigInteger x = BigInteger.ModPow(a, d, num);
                 BigInteger y = BigInteger.One;
                 for(int n = 0; n < s; n++) {
-                    y = BigInteger.ModPow(x, 2, n);
-                    if(y == 1 && x != 1 && x != n - 1) {
+                    y = BigInteger.ModPow(x, 2, num);
+                    if(y == 1 && x != 1 && x != num - 1) {
                         return false;
                     }
                     x = y;
@@ -234,8 +238,9 @@ namespace NumGen {
                 for(int i = 0; i < COUNT; i++) {
                     BigInteger num = BigIntegerExtensions.NextPositiveBigInteger(BITS / 8);
                     while(!num.isProbablyPrime()) {
-                        buffer.AddResult(num.ToString());
+                        num = BigIntegerExtensions.NextPositiveBigInteger(BITS / 8);
                     }
+                    buffer.AddResult(num.ToString());
                 }
             } else {
 
