@@ -3,11 +3,15 @@
 using System.Numerics;
 
 namespace Extensions {
-    using System.Text;
-    using NumGen;
 
+    /*
+    Contains some extension methods for working with BigIntegers and and the Miller-Rabin primality test
+    */
     public static class BigIntegerExtensions {
-        //https://stackoverflow.com/questions/3432412/calculate-square-root-of-a-biginteger-system-numerics-biginteger
+        /*
+        Modified from https://stackoverflow.com/questions/3432412/calculate-square-root-of-a-biginteger-system-numerics-biginteger
+        Find the square root of a BigInteger
+        */
         public static BigInteger Sqrt(this BigInteger n) {
             if (n == 0)
                 return 0;
@@ -33,7 +37,10 @@ namespace Extensions {
             return n >= lowerBound && n <= lowerBound + root + root;
         }
 
-        //https://stackoverflow.com/a/68593532/13471744
+        /*
+        Modified from https://stackoverflow.com/a/68593532/13471744
+        Generate a new BigInteger between given bounds
+        */
         public static BigInteger NextBigInteger(BigInteger minValue, BigInteger maxValue) {
             if (minValue > maxValue) throw new ArgumentException();
             if (minValue == maxValue) return minValue;
@@ -55,10 +62,13 @@ namespace Extensions {
             }
         }
 
+        /*
+        Quickly generate a positive BigInteger
+        */
         public static BigInteger NextPositiveBigInteger(int numBytes) {
             byte[] bytes = new byte[numBytes];
             System.Security.Cryptography.RandomNumberGenerator.Create().GetBytes(bytes);
-            //To get a positive number we have to brown out the first
+            //To get a positive number we have to brownout the first
             //bit (sign bit) of the MSB
             //For some reason BigInteger stores bytes in little endian,
             //so the MSB is the rightmost byte
@@ -67,6 +77,9 @@ namespace Extensions {
             return new BigInteger(bytes);
         }
 
+        /*
+        Miller-Rabin primality test
+        */
         public static bool isProbablyPrime(this BigInteger num) {
             int k = 5;
             if ((num < 2) || (num % 2 == 0)) return num == 2;
@@ -101,11 +114,15 @@ namespace Extensions {
 
 namespace NumGen {
     using System.Diagnostics;
-    using System.Reflection;
-    using System.Security.Authentication;
     using System.Text;
     using Extensions;
 
+    /*
+    My wrapper implementation of StringBuilder, which provides
+    a Thread-Safe way for concurrently running prime generators to
+    post their results. Also disallows adding more results once
+    the specified count has been reached.
+    */
     public class StringBuilderWrapper {
         private int count, max;
         private StringBuilder sb;
@@ -139,6 +156,9 @@ namespace NumGen {
         }
     }
 
+    /*
+    Helper class for validating command-line arguments
+    */
     public static class ArgumentHelper {
         
         public static readonly string HELP_MESSAGE = 
@@ -196,6 +216,9 @@ namespace NumGen {
         }
     }
 
+    /*
+    Main class for program logic
+    */
     public static class NumGen {
 
         public static int BITS = 32;
